@@ -117,6 +117,7 @@ class ELKClient
       avg_ms     = b.dig('avg_duration', 'value')
       scan_ratio = b.dig('avg_scan_ratio', 'value')
 
+      sample_meta = extract_sample_meta(b)
       {
         query_hash:        b['key'],
         collection:        b.dig('collection',   'buckets', 0, 'key'),
@@ -130,7 +131,12 @@ class ELKClient
         total_ops:         b.dig('total_ops',     'value').to_i,
         avg_docs_examined: b.dig('avg_docs_examined', 'value')&.round(0),
         avg_docs_returned: b.dig('avg_docs_returned', 'value')&.round(0),
-        sample_query:      extract_sample_query(b),
+        sample_query:      sample_meta[:query],
+        pipeline_stages:   sample_meta[:pipeline_stages],
+        query_type:        sample_meta[:query_type],
+        field_paths:       sample_meta[:field_paths],
+        app_name:          sample_meta[:app_name],
+        license_key_count: sample_meta[:license_key_count],
         severity:          classify_severity(avg_ms)
       }
     end
@@ -149,19 +155,52 @@ class ELKClient
     end
   end
 
-  # Pull the raw query string from the sample hit and truncate it safely.
-  def extract_sample_query(bucket)
+  # Extracts query text, app_name, and license_key_count from the sample hit.
+  # For getMore queries uses originatingCommand so Claude sees the real filter.
+  def extract_sample_meta(bucket)
     raw = bucket.dig('sample', 'hits', 'hits', 0, '_source', 'query')
-    return nil unless raw
+    return { query: nil, app_name: nil, license_key_count: nil } unless raw
 
     parsed = JSON.parse(raw) rescue nil
-    return raw[0, 2000] unless parsed
+    return { query: raw[0, 2000], app_name: nil, license_key_count: nil } unless parsed
 
-    # Extract just the pipeline/filter part to keep Claude prompt concise
-    attr = parsed.dig('attr', 'command') || parsed
-    JSON.generate(attr)[0, 2000]
+    attr     = parsed['attr'] || {}
+    app_name = attr['appName']
+
+    # For getMore, the real filter is in originatingCommand — use that for RCA
+    cmd = attr['originatingCommand'] || attr['command'] || {}
+
+    filter   = cmd['filter'] || cmd['pipeline']&.first&.dig('$match') || {}
+    lk_val   = filter['license_key']
+    lk_count = case lk_val
+               when Hash   then lk_val['$in']&.size  # {"$in": [...]} — multi-tenant
+               when String then 1                     # plain string — single tenant
+               end
+
+    full_cmd_json = JSON.generate(cmd)
+    query_for_rca = full_cmd_json[0, 2000]
+
+    # Extract pipeline stages from the FULL cmd before truncation so manifest matching
+    # doesn't miss late stages ($group, $facet) that fall past the 2000-char cutoff.
+    stage_re = /\$(match|lookup|unwind|group|project|facet|sort|addFields|replaceRoot|count)\b/
+    pipeline_stages = full_cmd_json.scan(stage_re).flatten.map { |s| "$#{s}" }.uniq
+
+    # Same idea for CONTENT matching: pull the `type` partition value and the dotted field
+    # paths from the FULL cmd, so the RCA matcher compares the query's real fields (including
+    # energy_consumption_cost, energy_co2_emission, …) even when they fall past the cutoff.
+    query_type  = full_cmd_json[/["']type["']\s*:\s*["']([a-z0-9_]+)["']/i, 1]
+    field_paths = full_cmd_json.scan(/\$?([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+)/).flatten.uniq
+
+    {
+      query:             query_for_rca,
+      app_name:          app_name,
+      license_key_count: lk_count,
+      pipeline_stages:   pipeline_stages,
+      query_type:        query_type,
+      field_paths:       field_paths
+    }
   rescue
-    nil
+    { query: nil, app_name: nil, license_key_count: nil, pipeline_stages: [], query_type: nil, field_paths: [] }
   end
 
   # ── Severity ───────────────────────────────────────────────────────────────────

@@ -36,7 +36,7 @@ class Notifier
 
       *Top offender:* `#{top&.dig(:collection) || 'n/a'}` — avg #{top&.dig(:avg_duration_ms).to_i}ms, #{top&.dig(:total_ops).to_i} ops in 24h
       *Root cause:* #{top&.dig(:root_cause) || top&.dig(:root_cause_type) || 'pending RCA'}
-      *Fix:* #{top&.dig(:index_suggestion) || top&.dig(:fix_description) || 'see email for details'}
+      *Fix (query optimisation):* #{top&.dig(:pipeline_rewrite) || top&.dig(:fix_description) || 'see email for details'}
       #{findings.size > 1 ? "+#{findings.size - 1} more findings in email report" : ''}
     MSG
 
@@ -98,7 +98,8 @@ class Notifier
           <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">#{f[:total_ops].to_i}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #eee">#{f[:root_cause] || f[:root_cause_type]}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px">
-            #{f[:index_suggestion] || f[:fix_description] || '—'}
+            #{f[:pipeline_rewrite] || f[:fix_description] || '—'}
+            #{f[:index_suggestion] ? "<div style='color:#999;font-size:11px;margin-top:4px'>Advisory (not applied): #{f[:index_suggestion]}</div>" : ''}
           </td>
         </tr>
       ROW

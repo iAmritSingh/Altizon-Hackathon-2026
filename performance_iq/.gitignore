@@ -6,3 +6,4 @@ manifests/*.json
 
 # Cloned source repos used only for manifest extraction
 _src/
+data/query_history.jsonl

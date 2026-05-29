@@ -29,5 +29,7 @@ notifications:
   slack_webhook_url: "<SLACK_WEBHOOK_URL>"
 
 github:
-  access_token: "<GITHUB_PAT>"
-  factory_repo:  Altizon/factory
+  access_token:      "<GITHUB_PAT>"
+  factory_repo:      Altizon/factory
+  mint_content_repo: Altizon/mint-content   # pipeline fix PRs go here
+  base_branch:       master                 # base branch for PRs (master or main)

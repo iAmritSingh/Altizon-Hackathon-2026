@@ -115,18 +115,55 @@ end
 
 STAGE_RE = /\$(match|lookup|unwind|group|project|facet|sort|addFields|replaceRoot|count)\b/.freeze
 PIPELINE_HINT_RE = /\.aggregate\b|\$match|\$lookup|\$unwind|\$group/.freeze
-MAX_EXCERPT_LINES = 60
+MAX_EXCERPT_LINES = 200
 
 def stages_in(text)
   text.scan(STAGE_RE).flatten.map { |s| "$#{s}" }.uniq
 end
 
+# Split a file's lines into per-method chunks at `def` boundaries.
+# Returns array of { name:, lines: } hashes.
+def split_into_methods(lines)
+  methods = []
+  current_name = nil
+  current_lines = []
+
+  lines.each do |line|
+    if (m = line.match(/^\s*def\s+([a-z_][a-z0-9_]*)/))
+      methods << { name: current_name, lines: current_lines } if current_name && !current_lines.empty?
+      current_name = m[1]
+      current_lines = [line]
+    else
+      current_lines << line
+    end
+  end
+  methods << { name: current_name, lines: current_lines } if current_name && !current_lines.empty?
+
+  # Also include a synthetic "top-level" chunk for files without def (simple script functions)
+  if methods.empty?
+    methods << { name: nil, lines: lines }
+  end
+
+  methods
+end
+
+# Capture the WHOLE method, not just a window around the $-stage markers. The fix generator
+# needs the full body to see variable definitions (e.g. parameter_map), the pipeline assembly
+# (e.g. aggregate([s1, s2, s3])), and the method boundary — without these it hallucinates
+# fragments that are never wired in or references vars from sibling methods. We start from the
+# method signature (or two lines before the first stage for def-less chunks) through the last
+# stage's closing context, capped generously.
 def extract_pipeline_excerpt(lines)
   marker_idxs = lines.each_index.select { |i| lines[i] =~ STAGE_RE }
   return nil if marker_idxs.empty?
 
-  first = [marker_idxs.first - 2, 0].max
-  last  = [marker_idxs.last + 2, lines.length - 1].min
+  def_idx = lines.each_index.find { |i| lines[i] =~ /^\s*def\s/ }
+  first   = def_idx || [marker_idxs.first - 2, 0].max
+  # Extend past the last stage to the pipeline-assembly / aggregate call when it follows closely.
+  assembly_idx = lines.each_index.select { |i| lines[i] =~ /\.aggregate\b/ }.find { |i| i >= marker_idxs.last }
+  last    = [marker_idxs.last + 2, assembly_idx || 0, lines.length - 1].compact.max
+  last    = lines.length - 1 if last > lines.length - 1
+
   window = lines[first..last]
   window = window.first(MAX_EXCERPT_LINES) if window.length > MAX_EXCERPT_LINES
   window.join
@@ -152,27 +189,38 @@ def extract_pipeline_manifest(roots, known_collections)
       next unless src =~ PIPELINE_HINT_RE
 
       lines = src.lines
-      signature = stages_in(src)
-      next if signature.empty?
+      rel_path = path.sub("#{root}/", '')
+      file_basename = File.basename(path, '.rb')
 
       # Which collections does this file touch? (by referenced model class)
       collections = class_to_coll.keys.select { |cls| src =~ /\b#{Regexp.escape(cls)}\b/ }
                                  .map { |cls| class_to_coll[cls] }
-      # Also direct string collection refs:  collection('name')  /  [:name]
       src.scan(/\.collection\(['"]([a-z_]+)['"]\)/).flatten.each { |c| collections << c }
       collections.uniq!
       next if collections.empty?
 
-      excerpt = extract_pipeline_excerpt(lines)
-      next unless excerpt
+      # One manifest entry per method — prevents a 60-line cap from hiding a later method
+      # that contains the actual problematic pipeline (e.g. bqi_index_report.rb has both
+      # create_inspection_bookings_pipeline AND create_inspection_bookings_pipeline_checker).
+      split_into_methods(lines).each do |method|
+        method_lines = method[:lines]
+        next unless method_lines.join =~ PIPELINE_HINT_RE
 
-      entry = {
-        'function'        => File.basename(path, '.rb'),
-        'file'            => path.sub("#{root}/", ''),
-        'stage_signature' => signature,
-        'pipeline_excerpt' => excerpt
-      }
-      collections.each { |coll| manifest[coll] << entry }
+        signature = stages_in(method_lines.join)
+        next if signature.empty?
+
+        excerpt = extract_pipeline_excerpt(method_lines)
+        next unless excerpt
+
+        fn_name = method[:name] ? "#{file_basename}##{method[:name]}" : file_basename
+        entry = {
+          'function'         => fn_name,
+          'file'             => rel_path,
+          'stage_signature'  => signature,
+          'pipeline_excerpt' => excerpt
+        }
+        collections.each { |coll| manifest[coll] << entry }
+      end
     end
   end
 
@@ -181,23 +229,47 @@ end
 
 # ── Main ─────────────────────────────────────────────────────────────────────────
 
-options = { out: 'manifests' }
+options = { out: 'manifests', factory_branch: 'rel_7.0', mint_content_branch: 'master' }
 OptionParser.new do |o|
-  o.banner = 'Usage: ruby bin/extract_manifests.rb --factory PATH [--mint-content PATH] [--out DIR]'
-  o.on('--factory PATH')      { |v| options[:factory] = v }
-  o.on('--mint-content PATH') { |v| options[:mint_content] = v }
-  o.on('--out DIR')           { |v| options[:out] = v }
+  o.banner = 'Usage: ruby bin/extract_manifests.rb --factory PATH [--factory-branch BRANCH] ' \
+             '[--mint-content PATH] [--mint-content-branch BRANCH] [--out DIR]'
+  o.on('--factory PATH')               { |v| options[:factory] = v }
+  o.on('--factory-branch BRANCH')      { |v| options[:factory_branch] = v }
+  o.on('--mint-content PATH')          { |v| options[:mint_content] = v }
+  o.on('--mint-content-branch BRANCH') { |v| options[:mint_content_branch] = v }
+  o.on('--out DIR')                    { |v| options[:out] = v }
 end.parse!
 
 abort 'ERROR: --factory PATH is required' unless options[:factory]
 abort "ERROR: factory path not found: #{options[:factory]}" unless Dir.exist?(options[:factory])
 
-FileUtils = Object.const_defined?(:FileUtils) ? Object.const_get(:FileUtils) : (require('fileutils') && Object.const_get(:FileUtils))
+require 'fileutils'
 FileUtils.mkdir_p(options[:out])
 
+# Checkout the requested branch in-place (non-destructive — switches back on exit if needed).
+def checkout_branch(repo_path, branch, label)
+  return unless branch
+
+  current = `git -C "#{repo_path}" rev-parse --abbrev-ref HEAD`.strip
+  if current == branch
+    puts "  #{label}: already on branch #{branch}"
+    return
+  end
+
+  result = system("git -C \"#{repo_path}\" checkout #{branch} --quiet 2>&1")
+  if result
+    puts "  #{label}: switched to branch #{branch}"
+  else
+    abort "ERROR: could not checkout branch '#{branch}' in #{repo_path}"
+  end
+end
+
+checkout_branch(options[:factory],      options[:factory_branch],      'factory')
+checkout_branch(options[:mint_content], options[:mint_content_branch], 'mint-content') if options[:mint_content]
+
 puts 'PerformanceIQ Manifest Extractor'
-puts "  factory      : #{options[:factory]}"
-puts "  mint-content : #{options[:mint_content] || '(skipped)'}"
+puts "  factory      : #{options[:factory]}#{options[:factory_branch] ? " (branch: #{options[:factory_branch]})" : ''}"
+puts "  mint-content : #{options[:mint_content] ? "#{options[:mint_content]}#{options[:mint_content_branch] ? " (branch: #{options[:mint_content_branch]})" : ''}" : '(skipped)'}"
 puts "  out          : #{options[:out]}\n\n"
 
 puts 'Extracting index manifest from Mongoid models...'
