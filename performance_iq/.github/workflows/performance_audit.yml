@@ -43,6 +43,23 @@ jobs:
             factory_repo: Altizon/factory
           EOF
 
+      # ── PHASE 1 — build codebase manifests (deterministic, no Claude tokens) ──
+      # Shallow-clone the source repos and extract existing indexes + candidate
+      # pipelines so the RCA engine can ground its suggestions in real code.
+      - name: Clone source repos (shallow)
+        run: |
+          git clone --depth 1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/Altizon/factory.git      _src/factory
+          git clone --depth 1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/Altizon/mint-content.git _src/mint-content
+
+      - name: Build manifests
+        working-directory: performance_iq
+        run: |
+          ruby bin/extract_manifests.rb \
+            --factory      ${{ github.workspace }}/_src/factory \
+            --mint-content ${{ github.workspace }}/_src/mint-content \
+            --out          manifests
+
+      # ── PHASE 2 — run the audit (ELK -> RCA -> notify -> auto-PR) ──
       - name: Run audit
         working-directory: performance_iq
         run: ruby runner.rb

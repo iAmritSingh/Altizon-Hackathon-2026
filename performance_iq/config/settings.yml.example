@@ -15,6 +15,12 @@ anthropic:
   api_key: "<ANTHROPIC_API_KEY>"
   model:   claude-sonnet-4-6
 
+rca:
+  # Codebase manifests built by bin/extract_manifests.rb (PHASE 1, deterministic).
+  # Used to inject existing-index + candidate-pipeline context into the RCA prompt.
+  # Defaults to ./manifests relative to lib/ if omitted.
+  manifests_dir: manifests
+
 notifications:
   sendgrid_api_key: "<SENDGRID_API_KEY>"
   from_email: datonis@altizon.com
