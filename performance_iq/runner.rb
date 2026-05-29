@@ -17,7 +17,7 @@ class Runner
     @config   = load_config
     @dry_run  = ENV['DRY_RUN'] == 'true'
     @elk      = ELKClient.new(@config['elasticsearch'])
-    @rca      = RcaEngine.new(@config['anthropic'])
+    @rca      = RcaEngine.new(@config['anthropic'], @config['rca'])
     @notifier = Notifier.new(@config['notifications'])
     @auto_pr  = AutoPr.new(@config['github'])
   end

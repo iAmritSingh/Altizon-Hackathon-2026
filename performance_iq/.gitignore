@@ -1,2 +1,8 @@
 config/settings.yml
 Gemfile.lock
+
+# Generated codebase manifests (rebuilt by bin/extract_manifests.rb each run)
+manifests/*.json
+
+# Cloned source repos used only for manifest extraction
+_src/
