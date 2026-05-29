@@ -42,8 +42,9 @@ class Runner
     # ── Step 2: RCA ────────────────────────────────────────────────────────────
     step "2/4", "Running root cause analysis"
 
-    actionable = findings.select { |f| %w[CRITICAL HIGH].include?(f[:severity]) }
-    puts "      #{actionable.size} HIGH/CRITICAL findings queued for RCA"
+    rca_limit  = @config.dig('thresholds', 'rca_limit') || 5
+    actionable = findings.select { |f| %w[CRITICAL HIGH].include?(f[:severity]) }.first(rca_limit)
+    puts "      Analyzing top #{actionable.size} HIGH/CRITICAL findings (rca_limit: #{rca_limit})"
     actionable.each_with_index do |f, i|
       print "      [#{i + 1}/#{actionable.size}] #{f[:collection]} (#{f[:query_hash]})... "
       @rca.diagnose(f)

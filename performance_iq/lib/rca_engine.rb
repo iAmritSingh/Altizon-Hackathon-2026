@@ -10,14 +10,18 @@ class RcaEngine
 
   SYSTEM_PROMPT = <<~PROMPT.freeze
     You are a MongoDB performance expert for a Ruby manufacturing platform (DFX by Altizon).
-    Given slow query metrics, return ONLY a JSON object with these exact keys:
+    Given slow query metrics, return ONLY a valid JSON object with these exact keys:
     {
       "root_cause": "one concise sentence explaining why the query is slow",
       "fix_description": "one sentence describing the fix",
-      "index_suggestion": "db.collection.create_index(...) command or null",
-      "pipeline_rewrite": "rewritten aggregation pipeline snippet or null"
+      "index_suggestion": "db.collection.create_index(...) command string, or null",
+      "pipeline_rewrite": "plain string description of pipeline rewrite, or null"
     }
-    No explanation outside the JSON.
+    STRICT RULES:
+    - Return only the JSON object — no markdown, no code fences, no explanation outside the JSON.
+    - All values must be plain strings or null — no nested objects, no arrays.
+    - Never use ISODate(), ObjectId(), or any MongoDB shell syntax inside the JSON values.
+    - Date references in strings must use ISO 8601 format (e.g. "2025-06-11T00:00:00Z").
   PROMPT
 
   def initialize(config)
@@ -32,7 +36,7 @@ class RcaEngine
     return finding unless @api_key && %w[CRITICAL HIGH].include?(finding[:severity])
 
     ai_result = call_claude(finding)
-    finding.merge!(ai_result) if ai_result
+    finding.merge!(ai_result.transform_keys(&:to_sym)) if ai_result
     finding
   end
 
@@ -96,10 +100,23 @@ class RcaEngine
     return nil unless response.success?
 
     text = response.dig('content', 0, 'text')
-    JSON.parse(text.gsub(/```json\n?|\n?```/, '').strip)
+    parse_claude_json(text)
   rescue => e
     warn "RCA Claude API error: #{e.message}"
     nil
+  end
+
+  def parse_claude_json(text)
+    cleaned = text.gsub(/```json\n?|\n?```/, '').strip
+    JSON.parse(cleaned)
+  rescue JSON::ParserError
+    # Claude returned non-JSON syntax (e.g. ISODate) — extract the safe fields via regex
+    result = {}
+    %w[root_cause fix_description index_suggestion pipeline_rewrite].each do |key|
+      match = cleaned.match(/"#{key}"\s*:\s*"((?:[^"\\]|\\.)*)"/m)
+      result[key] = match ? match[1].gsub('\\"', '"') : nil
+    end
+    result.any? { |_, v| v } ? result : nil
   end
 
   def build_user_prompt(finding)

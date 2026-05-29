@@ -9,6 +9,7 @@ thresholds:
   critical_duration_ms: 10000
   high_duration_ms: 1000
   top_n: 20
+  rca_limit: 5        # how many HIGH/CRITICAL findings to send to Claude for AI analysis
 
 anthropic:
   api_key: "<ANTHROPIC_API_KEY>"
