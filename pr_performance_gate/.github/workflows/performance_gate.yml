@@ -1,0 +1,70 @@
+name: Performance Gate
+
+# Track 1 — Blocks merge if a changed mint-content function regresses > 20% vs baseline.
+# Copy this file into mint-content/.github/workflows/ before the hackathon demo.
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '**/functions/**/*.rb'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:3.6
+        ports: ['27017:27017']
+      redis:
+        image: redis:6
+        ports: ['6379:6379']
+
+    steps:
+      - name: Checkout mint-content
+        uses: actions/checkout@v4
+
+      - name: Checkout factory (CI runner)
+        uses: actions/checkout@v4
+        with:
+          repository: Altizon/factory
+          token: ${{ secrets.GH_PAT }}
+          path: factory
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          working-directory: factory
+          bundler-cache: true
+
+      - name: Detect changed functions
+        id: changed
+        run: |
+          CHANGED=$(git diff --name-only origin/master...HEAD \
+            | grep 'functions/.*\.rb$' \
+            | grep -v '_spec\.rb$' || true)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED"   >> $GITHUB_OUTPUT
+          echo "EOF"        >> $GITHUB_OUTPUT
+
+      - name: Run benchmark
+        if: steps.changed.outputs.files != ''
+        env:
+          RAILS_ENV: test
+          MONGO_HOST: localhost
+          REDIS_URL: redis://localhost:6379
+        run: |
+          # TODO: implement scripts/benchmark_runner.rb
+          # ruby scripts/benchmark_runner.rb \
+          #   --functions "${{ steps.changed.outputs.files }}" \
+          #   --baseline  .performance/baselines.json \
+          #   --threshold-pct 20 \
+          #   --threshold-ms  50
+          echo "Benchmark runner not yet implemented — Track 1 stub"
+
+      - name: Update baseline on merge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          # TODO: commit updated .performance/baselines.json back to master
+          echo "Baseline update stub"

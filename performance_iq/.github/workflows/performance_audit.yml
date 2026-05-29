@@ -1,0 +1,48 @@
+name: PerformanceIQ Nightly Audit
+
+on:
+  schedule:
+    - cron: '30 20 * * *'   # 02:00 IST (20:30 UTC)
+  workflow_dispatch:         # allow manual trigger for demo
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: performance_iq
+
+      - name: Write settings.yml from secrets
+        working-directory: performance_iq
+        run: |
+          cat > config/settings.yml << EOF
+          elasticsearch:
+            host: https://elasticsearch-dfx.datonis.io
+            api_key: "${{ secrets.ELK_API_KEY }}"
+            index: dfx-mongodb-logs-*
+          thresholds:
+            lookback_hours: 24
+            min_duration_ms: 100
+            top_n: 20
+          anthropic:
+            api_key: "${{ secrets.ANTHROPIC_API_KEY }}"
+            model: claude-sonnet-4-6
+          notifications:
+            sendgrid_api_key: "${{ secrets.SENDGRID_API_KEY }}"
+            from_email: datonis@altizon.com
+            to_emails:
+              - app_dev@altizon.com
+            slack_webhook_url: "${{ secrets.SLACK_WEBHOOK_URL }}"
+          github:
+            access_token: "${{ secrets.GH_PAT }}"
+            factory_repo: Altizon/factory
+          EOF
+
+      - name: Run audit
+        working-directory: performance_iq
+        run: ruby runner.rb

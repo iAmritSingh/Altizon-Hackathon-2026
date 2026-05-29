@@ -1,0 +1,4 @@
+source 'https://rubygems.org'
+
+gem 'httparty', '~> 0.21'  # ELK + Claude API calls
+gem 'octokit',  '~> 6.1'   # GitHub API (Track 4)

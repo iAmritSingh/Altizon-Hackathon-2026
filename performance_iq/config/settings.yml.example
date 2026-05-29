@@ -1,0 +1,26 @@
+elasticsearch:
+  host:  https://elasticsearch-dfx.datonis.io
+  api_key: "<ES_API_KEY>"
+  index: dfx-mongodb-logs-*
+
+thresholds:
+  lookback_hours:   24
+  min_duration_ms:  100
+  critical_duration_ms: 10000
+  high_duration_ms: 1000
+  top_n: 20
+
+anthropic:
+  api_key: "<ANTHROPIC_API_KEY>"
+  model:   claude-sonnet-4-6
+
+notifications:
+  sendgrid_api_key: "<SENDGRID_API_KEY>"
+  from_email: datonis@altizon.com
+  to_emails:
+    - app_dev@altizon.com
+  slack_webhook_url: "<SLACK_WEBHOOK_URL>"
+
+github:
+  access_token: "<GITHUB_PAT>"
+  factory_repo:  Altizon/factory
