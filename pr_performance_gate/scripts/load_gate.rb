@@ -99,16 +99,46 @@ lines << ''
 if results.any?
   lines << (regressions.any? ? '❌ **FAIL** — p95 latency regressed under load.' : '✅ **PASS** — no p95 regression under load.')
   lines << ''
-  lines << '| Function | p95 (master → PR) | p99 | Throughput (master → PR) | Errors | Verdict |'
-  lines << '|----------|-------------------|-----|--------------------------|-------:|---------|'
-  results.each do |r|
+
+  # Helper: "base → head" with a signed % delta, bold head. Lower-is-better metrics by default.
+  fmt = lambda do |r, key, unit, lower_better = true|
     h = r[:head]; b = r[:base]
-    bp95 = b ? "#{b['p95_ms']}ms" : '— (new)'
-    chg  = b && b['p95_ms'].to_f.positive? ? " (#{((h['p95_ms'] - b['p95_ms']) / b['p95_ms'] * 100).round}%)" : ''
-    btp  = b ? "#{b['throughput_rps']}" : '—'
-    lines << "| `#{r[:name]}` | #{bp95} → **#{h['p95_ms']}ms**#{chg} | #{h['p99_ms']}ms | #{btp} → #{h['throughput_rps']}/s | #{h['errors']} | #{r[:regressed] ? '❌' : '✅'} |"
+    hv = h[key]; bv = b && b[key]
+    if bv && bv.to_f != 0
+      pct = ((hv - bv) / bv.to_f * 100).round
+      arrow = lower_better ? (pct > 0 ? '🔺' : (pct < 0 ? '🔻' : '')) : (pct < 0 ? '🔺' : (pct > 0 ? '🔻' : ''))
+      "#{bv}#{unit} → **#{hv}#{unit}** (#{pct >= 0 ? '+' : ''}#{pct}% #{arrow})".strip
+    else
+      "**#{hv}#{unit}**#{bv ? '' : ' (new)'}"
+    end
   end
-  lines << '' << "Threshold: p95 > #{opts[:threshold_pct]}% **and** > #{opts[:threshold_ms]}ms slower than master." if regressions.any?
+
+  lines << '### Latency & throughput (master → PR)'
+  lines << ''
+  lines << '| Function | p50 | p95 | p99 | Throughput | Errors | Verdict |'
+  lines << '|----------|-----|-----|-----|------------|-------:|---------|'
+  results.each do |r|
+    h = r[:head]
+    err = "#{h['errors']} (#{h['error_rate_pct']}%)"
+    lines << "| `#{r[:name]}` | #{fmt.call(r, 'p50_ms', 'ms')} | #{fmt.call(r, 'p95_ms', 'ms')} | "\
+             "#{fmt.call(r, 'p99_ms', 'ms')} | #{fmt.call(r, 'throughput_rps', '/s', false)} | #{err} | "\
+             "#{r[:regressed] ? '❌' : '✅'} |"
+  end
+
+  # Full distribution per function (min / mean / p90 / max / stddev), so reviewers see spread, not just p95.
+  lines << '' << '<details><summary>Full latency distribution (ms)</summary>' << ''
+  lines << '| Function | Version | requests | min | mean | p90 | max | stddev |'
+  lines << '|----------|---------|---------:|----:|-----:|----:|----:|-------:|'
+  results.each do |r|
+    [['master', r[:base]], ['PR', r[:head]]].each do |label, m|
+      next unless m
+      lines << "| `#{r[:name]}` | #{label} | #{m['requests']} | #{m['min_ms']} | #{m['mean_ms']} | "\
+               "#{m['p90_ms']} | #{m['max_ms']} | #{m['stddev_ms']} |"
+    end
+  end
+  lines << '</details>'
+
+  lines << '' << "**Block rule:** p95 must be > #{opts[:threshold_pct]}% **and** > #{opts[:threshold_ms]}ms slower than master." if regressions.any?
 end
 unless skipped.empty?
   lines << '' << '<details><summary>Skipped (not blocked)</summary>' << ''
