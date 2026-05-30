@@ -42,7 +42,7 @@ PR_ARG="${1:-}"; shift || true
 REPO="$PWD"; BASE_REF="origin/master"; DO_LOAD=0
 MONGO_URL=""; BOOTSTRAP="$GATE_DIR/test/bootstrap_local.rb"
 CONC=8; DUR=15; OUT=""
-DO_POST=0; TOKEN="${GH_TOKEN:-${GH_PAT:-${GITHUB_TOKEN:-}}}"
+DO_POST=0; NEW_COMMENT=0; TOKEN="${GH_TOKEN:-${GH_PAT:-${GITHUB_TOKEN:-}}}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -55,6 +55,7 @@ while [ $# -gt 0 ]; do
     --duration)    DUR="$2"; shift 2 ;;
     --out)         OUT="$2"; shift 2 ;;
     --post)        DO_POST=1; shift ;;          # post results back to the PR (needs a token)
+    --new-comment) NEW_COMMENT=1; shift ;;      # force a fresh PR comment instead of updating in place
     --token)       TOKEN="$2"; shift 2 ;;       # GitHub PAT (repo scope); else $GH_TOKEN/$GH_PAT
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
@@ -151,8 +152,9 @@ if [ "$DO_POST" = 1 ]; then
     echo "  --post given but no token (pass --token <PAT>, set GH_TOKEN, or add github.access_token to settings.yml). Skipping post." >&2
   else
     SLUG="$(git -C "$REPO" remote get-url origin | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')"
+    [ "$NEW_COMMENT" = 1 ] && NEW_FLAG="--new" || NEW_FLAG=""
     ruby "$SCRIPTS/post_pr_comment.rb" --repo-slug "$SLUG" --pr "$PR_NUM" --token "$TOKEN" \
-      --files "$OUT/pipeline_shape.md,$OUT/load_test.md"
+      --files "$OUT/pipeline_shape.md,$OUT/load_test.md" $NEW_FLAG
   fi
 fi
 

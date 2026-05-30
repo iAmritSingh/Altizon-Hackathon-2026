@@ -15,13 +15,14 @@ require 'json'
 require 'net/http'
 require 'uri'
 
-opts = { files: [], marker: 'perfiq-gate' }
+opts = { files: [], marker: 'perfiq-gate', force_new: false }
 OptionParser.new do |o|
   o.on('--repo-slug S') { |v| opts[:slug] = v }       # owner/repo
   o.on('--pr N')        { |v| opts[:pr] = v }
   o.on('--token T')     { |v| opts[:token] = v }
   o.on('--files F')     { |v| opts[:files] = v.split(',') }
   o.on('--marker M')    { |v| opts[:marker] = v }
+  o.on('--new')         { opts[:force_new] = true }    # always create a fresh comment (no in-place update)
 end.parse!
 
 abort 'need --repo-slug, --pr, --token' unless opts[:slug] && opts[:pr] && opts[:token]
@@ -45,8 +46,12 @@ def gh(method, path, token, payload = nil)
 end
 
 # Reuse our own marked comment if present (idempotent), else create a new one.
-existing = gh(:get, "/repos/#{opts[:slug]}/issues/#{opts[:pr]}/comments?per_page=100", opts[:token])
-mine = existing.find { |c| c['body'].to_s.include?(marker) }
+# With --new, always create a fresh comment (skip the in-place update).
+mine = nil
+unless opts[:force_new]
+  existing = gh(:get, "/repos/#{opts[:slug]}/issues/#{opts[:pr]}/comments?per_page=100", opts[:token])
+  mine = existing.find { |c| c['body'].to_s.include?(marker) }
+end
 
 if mine
   gh(:patch, "/repos/#{opts[:slug]}/issues/comments/#{mine['id']}", opts[:token], { body: body })
