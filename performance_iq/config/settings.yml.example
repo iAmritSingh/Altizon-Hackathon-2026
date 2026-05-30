@@ -3,6 +3,26 @@ elasticsearch:
   api_key: "<ES_API_KEY>"
   index: dfx-mongodb-logs-*
 
+prometheus:
+  host: https://prometheus.datonis.io   # node_exporter + mongodb_exporter metrics for the digest
+  # auth_token: ""                        # optional Bearer token; omit if the endpoint is open
+  range_hours: 24                         # VM health = peak/avg over this trailing window
+  step: 10m                               # subquery resolution for peak/avg
+
+error_scan:                               # scan other ELK log streams for error-level entries
+  lookback_hours: 24
+  severity_terms: "error crit alert emerg fatal exception"
+  indices:
+    - factory-nginx-error-logs*
+    - appregistry-nginx-error-logs*
+    - appcenter*error*
+    - beta-factory-error-logs*
+
+semaphore_scan:                           # machines CONTINUOUSLY stuck on a semaphore lock (sidekiq)
+  lookback_hours: 24                      # only the last 24h (current state, not history)
+  min_tries: 4                            # this many CONSECUTIVE failures with no lock/unlock since
+  index: factory-sidekiq-*
+
 thresholds:
   lookback_hours:   24
   min_duration_ms:  100

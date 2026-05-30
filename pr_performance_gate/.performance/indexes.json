@@ -1,0 +1,651 @@
+{
+  "access_lists": {
+    "class": "AccessList",
+    "model_file": "app/models/access_list.rb",
+    "indexes": [
+      "{ access_key: 1 }",
+      "{ target_key: 1 }"
+    ]
+  },
+  "accounts": {
+    "class": "Account",
+    "model_file": "app/models/account.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ account_key: 1}"
+    ]
+  },
+  "admin_users": {
+    "class": "AdminUser",
+    "model_file": "app/models/admin_user.rb",
+    "indexes": [
+      "{ email: 1 }"
+    ]
+  },
+  "alarms": {
+    "class": "Alarm",
+    "model_file": "app/models/alarm.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ alarm_key: 1 }",
+      "{ license_key: 1, parent_key: 1 }"
+    ]
+  },
+  "alarm_events": {
+    "class": "AlarmEvent",
+    "model_file": "app/models/alarm_event.rb",
+    "indexes": [
+      "{ license_key: 1, machine_key: 1, from: -1 }",
+      "{ license_key: 1, machine_key: 1, from: -1, to: -1 }",
+      "{ license_key: 1, created_at: -1 }"
+    ]
+  },
+  "alerts": {
+    "class": "Alert",
+    "model_file": "app/models/alert.rb",
+    "indexes": [
+      "{ license_key: 1, timestamp: -1 }",
+      "{ license_key: 1, machine_key:1, timestamp: -1 }",
+      "{ license_key: 1, working_day: -1 }",
+      "{ license_key: 1, machine_key:1, working_day: -1 }",
+      "{ alert_key: 1}"
+    ]
+  },
+  "annotations": {
+    "class": "Annotation",
+    "model_file": "app/models/annotation.rb",
+    "indexes": [
+      "{license_key: 1, created_by:1, page_key: 1}",
+      "{license_key: 1, page_key: 1}",
+      "{license_key: 1, subtype: 1, page_key: 1}"
+    ]
+  },
+  "audit_trails": {
+    "class": "AuditTrail",
+    "model_file": "app/models/audit_trail.rb",
+    "indexes": [
+      "{ license_key: 1, updated_at: -1 }",
+      "{ license_key: 1, entity_type: 1, action_taken: 1, entity_key: 1 }",
+      "{ audit_trail_key: 1}"
+    ]
+  },
+  "azure_blob_storage_files": {
+    "class": "AzureBlobStorageFile",
+    "model_file": "app/models/azure_blob_storage_file.rb",
+    "indexes": [
+      "{ azure_blob_path: 1 }",
+      "{ license_key: 1, current_app_name: 1, entity_type: 1 }"
+    ]
+  },
+  "chat_expenses": {
+    "class": "ChatExpense",
+    "model_file": "app/models/chat_expense.rb",
+    "indexes": [
+      "{ user_key: 1 }",
+      "{ license_key: 1 }"
+    ]
+  },
+  "chat_histories": {
+    "class": "ChatHistory",
+    "model_file": "app/models/chat_history.rb",
+    "indexes": [
+      "{ user_key: 1 }",
+      "{ license_key: 1 }",
+      "{ repository_key: 1 }"
+    ]
+  },
+  "checksheet_types": {
+    "class": "ChecksheetType",
+    "model_file": "app/models/checksheet_type.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ checksheet_type_key: 1}",
+      "{ license_key: 1, checksheet_type_key: 1}",
+      "{ license_key: 1, checksheet_type_name: 1}"
+    ]
+  },
+  "consumables": {
+    "class": "Consumable",
+    "model_file": "app/models/consumable.rb",
+    "indexes": [
+      "{ license_key: 1, consumable_key: 1 }",
+      "{ license_key: 1, consumable_number: 1 }"
+    ]
+  },
+  "custom_configurations": {
+    "class": "CustomConfiguration",
+    "model_file": "app/models/custom_configuration.rb",
+    "indexes": [
+      "{license_key: 1, key: 1}"
+    ]
+  },
+  "disabled_pages": {
+    "class": "DisabledPage",
+    "model_file": "app/models/disabled_page.rb",
+    "indexes": [
+      "{ license_key: 1, page_key: 1 }"
+    ]
+  },
+  "email_tasks": {
+    "class": "EmailTask",
+    "model_file": "app/models/email_task.rb",
+    "indexes": [
+      "{license_key: 1, page_key: 1}"
+    ]
+  },
+  "faas_data": {
+    "class": "FaasData",
+    "model_file": "app/models/faas_data.rb",
+    "indexes": [
+      "{ license_key: 1, created_at: -1 }",
+      "{ license_key: 1, from: -1, to: -1 }",
+      "{ license_key: 1, type: 1, from: -1 }",
+      "{ license_key: 1, type: 1, dirty: 1 }",
+      "{ license_key: 1, type: 1, working_day: -1 }"
+    ]
+  },
+  "generic_action_trails": {
+    "class": "GenericActionTrail",
+    "model_file": "app/models/generic_action_trail.rb",
+    "indexes": [
+      "{ license_key: 1, action_trail_key: 1 }",
+      "{ trigger_event_key: 1 }",
+      "{ generic_action_key: 1 }"
+    ]
+  },
+  "generic_events": {
+    "class": "GenericEvent",
+    "model_file": "app/models/generic_event.rb",
+    "indexes": [
+      "{ license_key: 1, created_at: -1 }",
+      "{ license_key: 1, machine_key: 1, type: 1, from: -1 }",
+      "{ license_key: 1, machine_set_key: 1, type: 1, from: -1 }",
+      "{ license_key: 1, line_key: 1, type: 1, from: -1 }",
+      "{ license_key: 1, machine_key: 1, type: 1, from: -1, to: -1 }",
+      "{ license_key: 1, type: 1, generic_object_id: 1, from: -1, to: -1 }"
+    ]
+  },
+  "generic_objects": {
+    "class": "GenericObject",
+    "model_file": "app/models/generic_object.rb",
+    "indexes": [
+      "{ license_key: 1, type: 1 }",
+      "{ generic_object_key: 1 }",
+      "{ license_key: 1, parent_key: 1, type: 1}",
+      "{ _type: 1, parent_key: 1}"
+    ]
+  },
+  "inspection_policies": {
+    "class": "InspectionPolicy",
+    "model_file": "app/models/inspection_policy.rb",
+    "indexes": [
+      "{license_key: 1}",
+      "{license_key: 1,process_category: 1}",
+      "{inspection_policy_key: 1}",
+      "{original_policy_key: 1}",
+      "{license_key: 1, original_policy_key: 1, code: 1}"
+    ]
+  },
+  "inspection_policy_bookings": {
+    "class": "InspectionPolicyBooking",
+    "model_file": "app/models/inspection_policy_booking.rb",
+    "indexes": [
+      "{ inspection_policy_booking_key: 1}",
+      "{ license_key: 1, timestamp: -1}",
+      "{ license_key: 1, inspection_policy_key: 1}",
+      "{ license_key: 1, original_policy_key: 1 }"
+    ]
+  },
+  "inspection_policy_groups": {
+    "class": "InspectionPolicyGroup",
+    "model_file": "app/models/inspection_policy_group.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ license_key: 1, inspection_policy_key: 1}",
+      "{ inspection_policy_group_key: 1}"
+    ]
+  },
+  "inspection_policy_parameters": {
+    "class": "InspectionPolicyParameter",
+    "model_file": "app/models/inspection_policy_parameter.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ inspection_policy_parameter_key: 1}",
+      "{ license_key: 1, inspection_policy_key: 1}",
+      "{license_key: 1, inspection_policy_group_key: 1}"
+    ]
+  },
+  "inspection_policy_schedules": {
+    "class": "InspectionPolicySchedule",
+    "model_file": "app/models/inspection_policy_schedule.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ inspection_policy_schedule_key: 1}",
+      "{ license_key: 1, inspection_policy_key: 1}"
+    ]
+  },
+  "inspection_samples": {
+    "class": "InspectionSample",
+    "model_file": "app/models/inspection_sample.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ inspection_sample_key: 1}",
+      "{ license_key: 1, inspection_policy_booking_key: 1}"
+    ]
+  },
+  "inventories": {
+    "class": "Inventory",
+    "model_file": "app/models/inventory.rb",
+    "indexes": [
+      "{license_key: 1, type: 1}",
+      "{inventory_key: 1}"
+    ]
+  },
+  "inventory_records": {
+    "class": "InventoryRecord",
+    "model_file": "app/models/inventory_record.rb",
+    "indexes": [
+      "{license_key: 1, inventory_record_key: 1}",
+      "{license_key: 1, inventory_key: 1}",
+      "{license_key: 1, type: 1, is_consumed: 1}",
+      "{license_key: 1, type: 1, storage_location: 1}"
+    ]
+  },
+  "machine_config_code_schedules": {
+    "class": "MachineConfigCodeSchedule",
+    "model_file": "app/models/machine_config_code_schedule.rb",
+    "indexes": [
+      "{ license_key: 1, machine_key: 1, recommendation_config_code: 1, working_day: -1}",
+      "{ license_key: 1, machine_key: 1, working_day: -1}",
+      "{ license_key: 1, working_day: -1}",
+      "{ machine_schedule_key: 1 }"
+    ]
+  },
+  "machine_queues": {
+    "class": "MachineQueue",
+    "model_file": "app/models/machine_queue.rb",
+    "indexes": [
+      "{machine_queue_key: 1}",
+      "{machine_key: 1}",
+      "{license_key: 1, machine_key: 1}"
+    ]
+  },
+  "maintenance_orders": {
+    "class": "MaintenanceOrder",
+    "model_file": "app/models/maintenance_order.rb",
+    "indexes": [
+      "{ license_key: 1, order_key:1 }",
+      "{ license_key: 1, order_number:1 }",
+      "{ license_key: 1, asset_type: 1, asset_key: 1}",
+      "{ license_key: 1, status:1 }",
+      "{license_key: 1, created_at: -1}"
+    ]
+  },
+  "maintenance_records": {
+    "class": "MaintenanceRecord",
+    "model_file": "app/models/maintenance_record.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ license_key: 1, maintenance_type: 1 }",
+      "{ license_key: 1, asset_type: 1, status: 1}",
+      "{ license_key: 1, asset_type: 1 , asset_key: 1}",
+      "{ license_key: 1, record_key: 1}",
+      "{ license_key: 1, record_number: 1}",
+      "{ license_key: 1, maintenance_regime: 1}"
+    ]
+  },
+  "maintenance_schedules": {
+    "class": "MaintenanceSchedule",
+    "model_file": "app/models/maintenance_schedule.rb",
+    "indexes": [
+      "{ license_key: 1, maintenance_schedule_key: 1 }",
+      "{ license_key: 1, machine_key: 1, active: 1 }",
+      "{ license_key: 1, tool_key: 1, active: 1 }",
+      "{ license_key: 1, original_policy_key: 1, active: 1 }"
+    ]
+  },
+  "maintenance_tickets": {
+    "class": "MaintenanceTicket",
+    "model_file": "app/models/maintenance_ticket.rb",
+    "indexes": [
+      "{license_key: 1, ticket_key: 1}",
+      "{license_key: 1, ticket_number: 1}",
+      "{license_key: 1, asset_type: 1, asset_key: 1}",
+      "{license_key: 1, status: 1}",
+      "{license_key: 1, created_at: -1}"
+    ]
+  },
+  "maintenance_workorders": {
+    "class": "MaintenanceWorkorder",
+    "model_file": "app/models/maintenance_workorder.rb",
+    "indexes": [
+      "{license_key: 1, maintenance_workorder_key: 1}",
+      "{license_key: 1, machine_key: 1}"
+    ]
+  },
+  "mashups": {
+    "class": "Mashup",
+    "model_file": "app/models/mashup.rb",
+    "indexes": [
+      "{ license_key: 1}",
+      "{ license_key: 1, mashup_key: 1}",
+      "{ license_key: 1, name: 1}"
+    ]
+  },
+  "mashup_widgets": {
+    "class": "MashupWidget",
+    "model_file": "app/models/mashup_widget.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ license_key: 1, mashup_widget_key: 1 }",
+      "{ license_key: 1, mashup_id: 1 }"
+    ]
+  },
+  "mdm_rollout_histories": {
+    "class": "MdmRolloutHistory",
+    "model_file": "app/models/mdm_rollout_history.rb",
+    "indexes": [
+      "{ mdm_rollout_history_key: 1 }",
+      "{ entity_type: 1, entity_code: 1, destination_license_key: 1 }",
+      "{ entity_type: 1 }",
+      "{ status: 1 }",
+      "{ destination_license_key: 1 }"
+    ]
+  },
+  "mint_notification_actions": {
+    "class": "MintNotificationAction",
+    "model_file": "app/models/mint_notification_action.rb",
+    "indexes": [
+      "{ license_key: 1, notification_action_key: 1 }"
+    ]
+  },
+  "mint_rules": {
+    "class": "MintRule",
+    "model_file": "app/models/mint_rule.rb",
+    "indexes": [
+      "{ license_key:1, mint_rule_key: 1}",
+      "{ license_key: 1, created_at: -1 }",
+      "{ license_key: 1, enabled: 1, mint_rule_module: 1, rule_applicability: 1}"
+    ]
+  },
+  "notebooks": {
+    "class": "Notebook",
+    "model_file": "app/models/notebook.rb",
+    "indexes": [
+      "{ license_key: 1, notebook_key: 1 }"
+    ]
+  },
+  "object_templates": {
+    "class": "ObjectTemplate",
+    "model_file": "app/models/object_template.rb",
+    "indexes": [
+      "{ name: 1 }",
+      "{ license_key: 1 }",
+      "{ object_template_key: 1 }"
+    ]
+  },
+  "object_template_indexes": {
+    "class": "ObjectTemplateIndex",
+    "model_file": "app/models/object_template_index.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ object_template_id: 1 }"
+    ]
+  },
+  "object_template_properties": {
+    "class": "ObjectTemplateProperty",
+    "model_file": "app/models/object_template_property.rb",
+    "indexes": [
+      "{object_template_id: 1,data_type: 1}"
+    ]
+  },
+  "object_template_relations": {
+    "class": "ObjectTemplateRelation",
+    "model_file": "app/models/object_template_relation.rb",
+    "indexes": [
+      "{ object_template_relation_key: 1 }",
+      "{ name: 1 }",
+      "{ object_template_id: 1 }",
+      "{ destination_object_template_id: 1 }"
+    ]
+  },
+  "object_template_validations": {
+    "class": "ObjectTemplateValidation",
+    "model_file": "app/models/object_template_validation.rb",
+    "indexes": [
+      "{ license_key: 1 }",
+      "{ object_template_id: 1 }"
+    ]
+  },
+  "pages": {
+    "class": "Page",
+    "model_file": "app/models/page.rb",
+    "indexes": [
+      "{ page_key: 1 }",
+      "{ app_name: 1 }",
+      "{ page_type: 1 }",
+      "{ mashup_id: 1 }"
+    ]
+  },
+  "page_preferences": {
+    "class": "PagePreference",
+    "model_file": "app/models/page_preference.rb",
+    "indexes": [
+      "{ license_key: 1, page_key: 1 }"
+    ]
+  },
+  "preplanned_downtimes": {
+    "class": "PreplannedDowntime",
+    "model_file": "app/models/preplanned_downtime.rb",
+    "indexes": [
+      "{ license_key: 1, preplanned_downtime_key: 1}",
+      "{ license_key: 1, machine_key: 1, working_day: -1}",
+      "{ license_key: 1, machine_key: 1, from: -1, to: -1}"
+    ]
+  },
+  "qualities": {
+    "class": "Quality",
+    "model_file": "app/models/quality.rb",
+    "indexes": [
+      "{ license_key: 1, part_key: 1, date: -1}",
+      "{ license_key: 1, machine_key: 1, date: -1}",
+      "{ license_key: 1, workorder_key: 1}"
+    ]
+  },
+  "recommendations": {
+    "class": "Recommendation",
+    "model_file": "app/models/recommendation/rule.rb",
+    "indexes": [
+      "{ recommendation_config_key: 1, name: 1 }",
+      "{ recommendation_config_key: 1, type: 1 }"
+    ]
+  },
+  "reports": {
+    "class": "Report",
+    "model_file": "app/models/report.rb",
+    "indexes": [
+      "{ report_key: 1 }",
+      "{ app_name: 1 }",
+      "{ pr_number: 1}",
+      "{ is_spec_func: 1, sibling_key: 1 }"
+    ]
+  },
+  "repositories": {
+    "class": "Repository",
+    "model_file": "app/models/repository.rb",
+    "indexes": [
+      "{ repository_key: 1 }",
+      "{ license_key: 1 }"
+    ]
+  },
+  "reprocess_entities": {
+    "class": "ReprocessEntity",
+    "model_file": "app/models/reprocess_entity.rb",
+    "indexes": [
+      "{reprocess_entity_key: 1}",
+      "{license_key: 1, primary_number: 1}"
+    ]
+  },
+  "routings": {
+    "class": "Routing",
+    "model_file": "app/models/routing.rb",
+    "indexes": [
+      "{ routing_key: 1 }",
+      "{ license_key: 1, parent_key: 1}",
+      "{ license_key: 1, workorder_key: 1}",
+      "{ license_key: 1, machine_key: 1, program_code: 1}"
+    ]
+  },
+  "rules": {
+    "class": "Rule",
+    "model_file": "app/models/rule.rb",
+    "indexes": [
+      "{ license_key: 1, name: 1 }",
+      "{ license_key: 1, rule_key: 1 }"
+    ]
+  },
+  "saved_queries": {
+    "class": "SavedQuery",
+    "model_file": "app/models/saved_query.rb",
+    "indexes": [
+      "{ saved_query_key: 1 }"
+    ]
+  },
+  "soft_notifications": {
+    "class": "SoftNotification",
+    "model_file": "app/models/soft_notification.rb",
+    "indexes": [
+      "{license_key: 1, timestamp: -1}",
+      "{license_key: 1, severity: -1}",
+      "{soft_notification_key: 1}",
+      "{license_key: 1, seen_at: 1}",
+      "{license_key: 1, caller_class: 1, caller_key: 1}",
+      "{soft_notifcation_id: 1}",
+      "{trigger_event_key: 1}"
+    ]
+  },
+  "spare_parts": {
+    "class": "SparePart",
+    "model_file": "app/models/spare_part.rb",
+    "indexes": [
+      "{ license_key: 1, spare_part_key: 1 }",
+      "{ license_key: 1, spare_part_number: 1 }"
+    ]
+  },
+  "tasks": {
+    "class": "Task",
+    "model_file": "app/models/task.rb",
+    "indexes": [
+      "{ license_key: 1, recurring: 1}",
+      "{ task_key: 1}"
+    ]
+  },
+  "task_runs": {
+    "class": "TaskRun",
+    "model_file": "app/models/task_run.rb",
+    "indexes": [
+      "{ status: 1 }",
+      "{ task_id: 1 }",
+      "{ next_scheduled_time: -1 }"
+    ]
+  },
+  "tool_parameters": {
+    "class": "ToolParameter",
+    "model_file": "app/models/tool_parameter.rb",
+    "indexes": [
+      "{ license_key: 1, tool_key: 1, parameter_key: 1 }",
+      "{ license_key: 1, parameter_key: 1 }",
+      "{ tool_parameter_key: 1 }",
+      "{ tool_key: 1 }"
+    ]
+  },
+  "traced_objects": {
+    "class": "TracedObject",
+    "model_file": "app/models/traced_object.rb",
+    "indexes": [
+      "{ traced_object_key: 1 }",
+      "{ license_key: 1, created_at: -1 }",
+      "{ license_key: 1, object_type: 1, primary_number: 1 }",
+      "{ license_key: 1, object_type: 1, secondary_number: 1 }",
+      "{ license_key: 1, object_type: 1, primary_number: 1, machine_key: 1 }",
+      "{ license_key: 1, parent_key: 1 }",
+      "{ license_key: 1, from: -1, to: -1 }",
+      "{ license_key: 1, object_type: 1, working_day: -1 }",
+      "{ license_key: 1, updated_at: -1 }"
+    ]
+  },
+  "translations": {
+    "class": "Translation",
+    "model_file": "app/models/translation.rb",
+    "indexes": [
+      "{ license_key: 1, locale: 1 }"
+    ]
+  },
+  "trigger_events": {
+    "class": "TriggerEvent",
+    "model_file": "app/models/trigger_event.rb",
+    "indexes": [
+      "{ license_key: 1, trigger_event_key: 1 }",
+      "{ timestamp: 1 }",
+      "{ license_key: 1, timestamp: -1 }"
+    ]
+  },
+  "user_preferences": {
+    "class": "UserPreference",
+    "model_file": "app/models/user_preference.rb",
+    "indexes": [
+      "{ user_key: 1 }",
+      "{ license_key: 1 }"
+    ]
+  },
+  "utilities": {
+    "class": "Utility",
+    "model_file": "app/models/utility.rb",
+    "indexes": [
+      "{license_key: 1, utility_key: 1}",
+      "{license_key: 1, type: 1}",
+      "{license_key: 1, vendor_key: 1}",
+      "{license_key: 1, utility_type_key: 1}"
+    ]
+  },
+  "utility_types": {
+    "class": "UtilityType",
+    "model_file": "app/models/utility_type.rb",
+    "indexes": [
+      "{license_key: 1, utility_type_key: 1}",
+      "{license_key: 1, code: 1}",
+      "{license_key: 1, soft_deleted: 1}"
+    ]
+  },
+  "vendors": {
+    "class": "Vendor",
+    "model_file": "app/models/vendor.rb",
+    "indexes": [
+      "{license_key: 1, code: 1}"
+    ]
+  },
+  "workcenter_bookings_schedules": {
+    "class": "WorkcenterBookingsSchedule",
+    "model_file": "app/models/workcenter_bookings_schedule.rb",
+    "indexes": [
+      "{ license_key: 1, machine_key: 1, from: -1 }"
+    ]
+  },
+  "workorders": {
+    "class": "Workorder",
+    "model_file": "app/models/workorder.rb",
+    "indexes": [
+      "{ license_key: 1, workorder_key: 1 }",
+      "{ license_key: 1, part_key: 1 }",
+      "{ license_key: 1, plant_key: 1 }",
+      "{ license_key: 1, number: 1}"
+    ]
+  },
+  "yokotens": {
+    "class": "Yokoten",
+    "model_file": "app/models/yokoten.rb",
+    "indexes": [
+      "{ license_key: 1, yokoten_key: 1 }"
+    ]
+  }
+}

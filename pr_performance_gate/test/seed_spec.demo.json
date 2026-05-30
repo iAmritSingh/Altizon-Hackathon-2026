@@ -1,0 +1,1 @@
+{ "generic_events": { "count": 50000, "date_span_days": 30, "cardinality": { "license_key": 20, "machine_key": 200 } } }

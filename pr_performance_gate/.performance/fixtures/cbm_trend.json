@@ -1,0 +1,12 @@
+{
+  "_comment": "Sample invocation inputs for cbm_trend.main(license_key, task_id, args, context). The gate calls main() with these so the function builds its real pipeline, then runs explain() against staging. Use a license_key + args that exercise a representative data volume. One file per function: .performance/fixtures/<function_basename>.json",
+  "license_key": "REPLACE_WITH_A_REAL_TENANT_LICENSE_KEY",
+  "task_id": "perf-gate",
+  "args": {
+    "from": 1779840000,
+    "to": 1779926400,
+    "machine_keys": ["REPLACE_WITH_REAL_MACHINE_KEY"],
+    "shift_key": "REPLACE_WITH_REAL_SHIFT_KEY"
+  },
+  "context": {}
+}

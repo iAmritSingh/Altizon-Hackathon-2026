@@ -106,8 +106,10 @@ class RcaEngine
     {
       "matched_function": "exact name of the candidate that generates this query, or \"none\"",
       "match_evidence": "one line: which $match type/fields and stages line up (or why none fit)",
-      "root_cause": "one precise sentence citing the key log signal",
-      "fix_description": "one imperative sentence describing the query/pipeline restructure",
+      "root_cause": "one precise TECHNICAL sentence citing the key log signal (for engineers)",
+      "fix_description": "one imperative TECHNICAL sentence describing the query/pipeline restructure",
+      "impact_summary": "PLAIN-ENGLISH, non-technical: what is slow and why it matters, in business terms a manager would understand. No jargon (no 'index', 'scan ratio', '$unwind', 'IXSCAN'). Mention the user-facing effect and the wait time. e.g. 'The energy dashboard is slow to load (about 25 seconds) because the system sifts through far more records than it needs each time someone opens it.'",
+      "fix_summary": "PLAIN-ENGLISH, non-technical: what the fix does and the expected improvement, no jargon. e.g. 'We reorganised how this report fetches its data so it only looks at the records it actually needs — this should make the dashboard load almost instantly.' Use null only when there is genuinely no fix.",
       "index_suggestion": "ALMOST ALWAYS null. At most a SHORT plain-English advisory that a DBA could LATER evaluate whether an index helps (e.g. 'if this shape persists, a DBA could assess an index covering license_key+machine_key+properties.date') — NEVER a create_index/createIndex command, never DDL, never presented as the fix.",
       "pipeline_rewrite": "one plain-English sentence describing the query/pipeline change, or null when matched_function is none",
       "confidence": 0.85,
@@ -152,7 +154,14 @@ class RcaEngine
 
     # Generate the actual Ruby patch only when the source was CONFIRMED by the LLM, a rewrite
     # was proposed, and confidence clears the bar. No confirmed source => advisory only, no PR.
-    if finding[:candidate_pipeline] && finding[:pipeline_rewrite] && finding[:confidence].to_f >= 0.75
+    # finding[:patch_skip_reason] records WHY a PR wasn't raised, surfaced in the run summary.
+    if finding[:candidate_pipeline].nil?
+      finding[:patch_skip_reason] = 'no source function confirmed in codebase (advisory only)'
+    elsif finding[:pipeline_rewrite].to_s.empty?
+      finding[:patch_skip_reason] = 'no query rewrite proposed'
+    elsif finding[:confidence].to_f < 0.75
+      finding[:patch_skip_reason] = "confidence #{(finding[:confidence].to_f * 100).round}% below 75% threshold"
+    else
       finding[:code_patch] = generate_code_fix(finding)
     end
 
@@ -414,7 +423,7 @@ class RcaEngine
 
     # Last resort: pull out each field individually via regex.
     result = {}
-    %w[matched_function match_evidence root_cause fix_description index_suggestion pipeline_rewrite confidence estimated_speedup].each do |key|
+    %w[matched_function match_evidence root_cause fix_description impact_summary fix_summary index_suggestion pipeline_rewrite confidence estimated_speedup].each do |key|
       m = cleaned.match(/"#{key}"\s*:\s*(?:"((?:[^"\\]|\\.)*)"|([0-9.]+)|null)/m)
       next unless m
       result[key] = m[2] ? m[2].to_f : m[1]&.gsub('\\"', '"')
@@ -510,10 +519,17 @@ class RcaEngine
 
     messages = [{ role: 'user', content: code_fix_prompt(finding, cp, old_excerpt) }]
 
+    last_violation = nil
     MAX_FIX_ATTEMPTS.times do |attempt|
       new_excerpt = call_code_model(messages)
-      return nil if new_excerpt.to_s.empty?
-      return nil if new_excerpt == old_excerpt # Claude made no change — its "no safe fix" signal
+      if new_excerpt.to_s.empty?
+        finding[:patch_skip_reason] = 'code-fix generation returned nothing'
+        return nil
+      end
+      if new_excerpt == old_excerpt
+        finding[:patch_skip_reason] = 'LLM found no safe equivalent rewrite (returned code unchanged)'
+        return nil
+      end
 
       violation = rewrite_violation(old_excerpt, new_excerpt, finding)
       unless violation
@@ -525,6 +541,7 @@ class RcaEngine
         }
       end
 
+      last_violation = violation
       warn "RCA: rewrite attempt #{attempt + 1}/#{MAX_FIX_ATTEMPTS} for #{cp['function']} rejected — #{violation}"
       # Feed the violation back for one corrective retry.
       messages << { role: 'assistant', content: new_excerpt }
@@ -536,9 +553,11 @@ class RcaEngine
       FEEDBACK
     end
 
+    finding[:patch_skip_reason] = "rewrite failed safety check after #{MAX_FIX_ATTEMPTS} attempts — #{last_violation}"
     nil
   rescue => e
     warn "RCA code-fix generation error: #{e.message}"
+    finding[:patch_skip_reason] = "code-fix error: #{e.message}"
     nil
   end
 

@@ -6,6 +6,7 @@ $LOAD_PATH.unshift File.join(__dir__, 'lib')
 
 require 'yaml'
 require 'elk_client'
+require 'prometheus_client'
 require 'rca_engine'
 require 'notifier'
 require 'auto_pr'
@@ -18,6 +19,7 @@ class Runner
     @config   = load_config
     @dry_run  = ENV['DRY_RUN'] == 'true'
     @elk      = ELKClient.new(@config['elasticsearch'])
+    @prom     = PrometheusClient.new(@config['prometheus'])
     @rca      = RcaEngine.new(@config['anthropic'], @config['rca'])
     @notifier = Notifier.new(@config['notifications'])
     @auto_pr  = AutoPr.new(@config['github'])
@@ -65,19 +67,10 @@ class Runner
       puts f[:root_cause_type] || 'done'
     end
 
-    # ── Step 3: Notifications ──────────────────────────────────────────────────
-    step "3/4", "Sending digest"
-
-    if @dry_run
-      puts "      [DRY RUN] Skipping email + Slack"
-      print_rca_preview(actionable)
-    else
-      @notifier.send_digest(findings, collection_summary: summary, date: Time.now.strftime('%Y-%m-%d'))
-      puts "      Email + Slack sent"
-    end
-
-    # ── Step 4: Auto-PR ────────────────────────────────────────────────────────
-    step "4/4", "Raising fix PRs"
+    # ── Step 3: Auto-PR ────────────────────────────────────────────────────────
+    # Raised BEFORE the digest so the email can report each finding's live status
+    # (PR raised / awaiting approval / advisory) instead of guessing.
+    step "3/4", "Raising fix PRs"
 
     # Only raise PRs when there is an actual code change (pipeline rewrite in mint-content).
     # Index suggestions surface in the audit email — no PR needed for those.
@@ -88,7 +81,7 @@ class Runner
     actionable.each do |f|
       conf    = f[:confidence] ? "#{(f[:confidence].to_f * 100).round}%" : 'n/a'
       rewrite = f[:pipeline_rewrite] ? 'yes' : 'null'
-      patch   = f[:code_patch]       ? "PR ready (#{f[:code_patch]['function']})" : 'no patch'
+      patch   = f[:code_patch] ? "PR ready (#{f[:code_patch]['function']})" : "no patch — #{f[:patch_skip_reason] || 'unknown'}"
       src     = f[:candidate_pipeline] ? "#{f[:candidate_pipeline]['function']} [LLM-confirmed]" : "none (#{f[:candidate_shortlist]&.size || 0} shortlisted)"
       puts "        #{f[:collection]} (#{f[:query_hash]}) conf=#{conf} rewrite=#{rewrite} source=#{src} → #{patch}"
     end
@@ -102,9 +95,56 @@ class Runner
       end
     else
       fixable.each do |f|
-        pr_url = @auto_pr.raise_pr(f)
-        puts "      PR raised: #{pr_url}"
+        f[:pr_url] = @auto_pr.raise_pr(f)            # attach so the digest can show PR status
+        puts "      PR raised: #{f[:pr_url] || '(failed — see warning above)'}"
       end
+    end
+
+    # ── Step 4: Notifications ──────────────────────────────────────────────────
+    step "4/4", "Sending digest"
+
+    # Infra + error insights for the digest (best-effort — never block the audit).
+    vm_health     = @prom.vm_health
+    dashboards    = @prom.dashboards
+    es_cfg        = @config['error_scan'] || {}
+    error_summary = @elk.fetch_error_summary(
+      indices:        es_cfg['indices'] || [],
+      hours:          es_cfg['lookback_hours'] || hours,
+      severity_terms: es_cfg['severity_terms'] || 'error crit alert emerg fatal exception'
+    )
+    sem_cfg          = @config['semaphore_scan'] || {}
+    stuck_semaphores = @elk.fetch_stuck_semaphores(
+      hours:     sem_cfg['lookback_hours'] || 168,
+      min_tries: sem_cfg['min_tries'] || 4,
+      index:     sem_cfg['index'] || 'factory-sidekiq-*'
+    )
+    if stuck_semaphores.any?
+      w = stuck_semaphores.first
+      puts "      Stuck machines: #{stuck_semaphores.size} on semaphore locks (worst #{w[:lock_key]} ×#{w[:tries]} over #{w[:span_hours]}h)"
+    end
+    if (sk = dashboards[:sidekiq_performance])
+      puts "      Sidekiq: #{sk[:throughput_per_min]}/min, #{sk[:busy_workers]} busy, #{sk[:retry]} retry, #{sk[:dead]} dead"
+    end
+    if (mp = dashboards[:mongo_performance]&.first)
+      puts "      Mongo: slowest read #{mp[:collection]} #{(mp[:read_latency_us] / 1000.0).round(2)}ms"
+    end
+    if vm_health.any?
+      hot = vm_health.first
+      puts "      VM health (24h peak): #{vm_health.size} VMs, busiest #{hot[:vm]} (cpu #{hot[:cpu_peak]}% / mem #{hot[:mem_peak]}% / disk #{hot[:disk_peak]}%)"
+    end
+    if error_summary.any?
+      puts "      Error scan: #{error_summary.sum { |e| e[:error_count].to_i }} errors across #{error_summary.size} log streams"
+    end
+
+    if @dry_run
+      puts "      [DRY RUN] Skipping email + Slack"
+      print_rca_preview(actionable)
+    else
+      @notifier.send_digest(findings, collection_summary: summary,
+                            vm_health: vm_health, error_summary: error_summary,
+                            stuck_semaphores: stuck_semaphores, dashboards: dashboards,
+                            date: Time.now.strftime('%Y-%m-%d'))
+      puts "      Email + Slack sent"
     end
 
     # Persist this run's findings for future cross-run correlation.

@@ -1,0 +1,13 @@
+{
+  "generic_events": {
+    "count": 300000,
+    "date_span_days": 180,
+    "types": ["pph_slot", "machine_slot", "operator_assignment", "part_opn_aggr"],
+    "cardinality": { "license_key": 20, "machine_key": 200 },
+    "fixture_values": {
+      "license_key": "REPLACE_WITH_FIXTURE_TENANT",
+      "machine_key": "REPLACE_WITH_FIXTURE_MACHINE",
+      "date_from": 1779840000
+    }
+  }
+}

@@ -1,70 +1,146 @@
 name: Performance Gate
 
-# Track 1 — Blocks merge if a changed mint-content function regresses > 20% vs baseline.
-# Copy this file into mint-content/.github/workflows/ before the hackathon demo.
+# Track 1 — Blocks merge when a changed mint-content function makes its MongoDB pipeline
+# structurally heavier (added $lookup/$unwind/$facet fan-out, dropped a $match filter, or removed
+# the license_key tenant filter). Copy into mint-content/.github/workflows/.
+#
+# Why pipeline SHAPE, not timing/docs-examined: these functions run aggregation pipelines whose
+# cost depends on PRODUCTION data volume. On CI / limited-staging data a bad pipeline still runs
+# fast and explain() under-counts docs, so a stopwatch or staging explain would pass regressions.
+# Comparing pipeline shape vs the base branch is data-volume independent and reliable everywhere.
+#
+# Optional accuracy booster: explain_gate.rb can additionally measure docs-examined via
+# explain() — but ONLY against a prod-scale read-only secondary (see the commented step below).
 
 on:
   pull_request:
     branches: [master]
-    paths:
-      - '**/functions/**/*.rb'
+    paths: ['**/functions/**/*.rb']
+  push:
+    branches: [master]
+    paths: ['**/functions/**/*.rb']
 
 jobs:
-  benchmark:
+  # ── Load test: fire each changed function under concurrency, master vs PR, block on p95 ──────
+  # Runs only when configured (var PERF_GATE_BOOTSTRAP set). Seeds a throwaway Mongo with
+  # prod-scale dummy data + prod indexes, then load_gate runs both versions on this same runner.
+  load-test:
+    if: ${{ vars.PERF_GATE_BOOTSTRAP != '' }}
     runs-on: ubuntu-latest
-
     services:
       mongo:
-        image: mongo:3.6
+        image: mongo:6
         ports: ['27017:27017']
-      redis:
-        image: redis:6
-        ports: ['6379:6379']
-
+    env:
+      PERF_GATE_MONGO_URL: mongodb://localhost:27017/perf_gate
+      PERF_GATE_BOOTSTRAP: ${{ vars.PERF_GATE_BOOTSTRAP }}
     steps:
-      - name: Checkout mint-content
-        uses: actions/checkout@v4
-
-      - name: Checkout factory (CI runner)
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Checkout factory (runtime loader)
         uses: actions/checkout@v4
         with:
           repository: Altizon/factory
           token: ${{ secrets.GH_PAT }}
           path: factory
-
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           working-directory: factory
           bundler-cache: true
+      - name: Detect changed functions
+        id: changed
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "files=$(git diff --name-only "$BASE"...HEAD | grep 'functions/.*\.rb$' | grep -v '_spec\.rb$' | tr '\n' ' ' || true)" >> "$GITHUB_OUTPUT"
+      - name: Seed dummy data (prod-scale + prod indexes)
+        if: steps.changed.outputs.files != ''
+        run: |
+          gem install mongo --no-document
+          ruby scripts/seed_dummy_data.rb --mongo-url "$PERF_GATE_MONGO_URL" \
+            --indexes .performance/indexes.json --spec .performance/seed_spec.json
+      - name: Load-test gate (master vs PR)
+        if: steps.changed.outputs.files != ''
+        run: |
+          ruby scripts/load_gate.rb \
+            --functions "${{ steps.changed.outputs.files }}" \
+            --base "${{ steps.changed.outputs.base }}" \
+            --fixtures-dir .performance/fixtures \
+            --concurrency 8 --duration 15 \
+            --threshold-pct 20 --threshold-ms 50 \
+            --out load_comment.md
+      - name: Comment load results on PR
+        if: always() && github.event_name == 'pull_request' && steps.changed.outputs.files != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          [ -f load_comment.md ] && gh pr comment "${{ github.event.pull_request.number }}" --body-file load_comment.md || true
+
+  pipeline-shape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for base diff)
+        uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: ruby/setup-ruby@v1
+        with: { ruby-version: '3.2' }   # static gate uses stdlib only — no bundle needed
 
       - name: Detect changed functions
         id: changed
         run: |
-          CHANGED=$(git diff --name-only origin/master...HEAD \
-            | grep 'functions/.*\.rb$' \
-            | grep -v '_spec\.rb$' || true)
-          echo "files<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGED"   >> $GITHUB_OUTPUT
-          echo "EOF"        >> $GITHUB_OUTPUT
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          CHANGED=$(git diff --name-only "$BASE"...HEAD \
+            | grep 'functions/.*\.rb$' | grep -v '_spec\.rb$' | tr '\n' ' ' || true)
+          echo "files=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "Changed functions: $CHANGED"
 
-      - name: Run benchmark
+      - name: Pipeline-shape gate
+        id: gate
         if: steps.changed.outputs.files != ''
-        env:
-          RAILS_ENV: test
-          MONGO_HOST: localhost
-          REDIS_URL: redis://localhost:6379
         run: |
-          # TODO: implement scripts/benchmark_runner.rb
-          # ruby scripts/benchmark_runner.rb \
-          #   --functions "${{ steps.changed.outputs.files }}" \
-          #   --baseline  .performance/baselines.json \
-          #   --threshold-pct 20 \
-          #   --threshold-ms  50
-          echo "Benchmark runner not yet implemented — Track 1 stub"
+          ruby scripts/static_gate.rb \
+            --functions "${{ steps.changed.outputs.files }}" \
+            --base "${{ steps.changed.outputs.base }}" \
+            --out gate_comment.md
 
-      - name: Update baseline on merge
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      - name: Comment results on PR
+        if: always() && github.event_name == 'pull_request' && steps.changed.outputs.files != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # TODO: commit updated .performance/baselines.json back to master
-          echo "Baseline update stub"
+          [ -f gate_comment.md ] && gh pr comment "${{ github.event.pull_request.number }}" --body-file gate_comment.md || true
+
+      # ── OPTIONAL: explain() scan-cost against a SELF-SEEDED ephemeral Mongo ─────────────────
+      # No prod/staging access needed — we seed a throwaway Mongo with production-SCALE dummy data
+      # and the real prod indexes, so docs-examined is meaningful and the gate compares PR vs
+      # baseline on that fixed dataset. To enable: add a `mongo` service to this job, set var
+      # PERF_GATE_BOOTSTRAP (factory runtime loader) + secret GH_PAT, fill in
+      # .performance/seed_spec.json fixture_values + .performance/fixtures/<fn>.json, then:
+      #
+      #   services:
+      #     mongo: { image: mongo:6, ports: ['27017:27017'] }
+      #
+      # - name: Checkout factory (runtime loader)
+      #   uses: actions/checkout@v4
+      #   with: { repository: Altizon/factory, token: ${{ secrets.GH_PAT }}, path: factory }
+      # - uses: ruby/setup-ruby@v1
+      #   with: { ruby-version: '3.2', working-directory: factory, bundler-cache: true }
+      # - name: Seed dummy data (prod-scale + prod indexes) into ephemeral Mongo
+      #   run: |
+      #     gem install mongo --no-document
+      #     ruby scripts/seed_dummy_data.rb \
+      #       --mongo-url mongodb://localhost:27017/perf_gate \
+      #       --indexes .performance/indexes.json --spec .performance/seed_spec.json
+      # - name: explain() scan-cost gate (vs baseline on the seeded dataset)
+      #   if: steps.changed.outputs.files != ''
+      #   env:
+      #     PERF_GATE_MONGO_URL: mongodb://localhost:27017/perf_gate
+      #     PERF_GATE_BOOTSTRAP: ${{ vars.PERF_GATE_BOOTSTRAP }}
+      #   run: |
+      #     ruby scripts/explain_gate.rb --functions "${{ steps.changed.outputs.files }}" \
+      #       --baseline .performance/baselines.json --fixtures-dir .performance/fixtures \
+      #       --threshold-pct 20 --threshold-abs 1000 --out explain_comment.md \
+      #       ${{ github.event_name == 'push' && '--update-baseline' || '' }}
